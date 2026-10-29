@@ -71,12 +71,6 @@ export const CONTACT = {
   whatsapp: "https://wa.me/390000000000",
 };
 
-export function getAvailableSlots(date: string): string[] {
-  const base = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00"];
-  const dayHash = date.split("-").reduce((a, b) => a + parseInt(b, 10), 0);
-  return base.filter((_, i) => (i + dayHash) % 3 !== 0);
-}
-
 export interface Appointment {
   id: string;
   serviceId: ServiceId;
@@ -98,6 +92,9 @@ export interface RecipeRequest {
   status: "pending" | "approved" | "rejected";
   createdAt: string;
   code?: string;
+  signatureDataUrl?: string;
+  signedBy?: string;
+  signedAt?: string;
 }
 
 export interface Invoice {
@@ -112,63 +109,182 @@ export interface Invoice {
   paidAt?: string;
 }
 
-let appointments: Appointment[] = [];
-let recipes: RecipeRequest[] = [
-  { id: "r1", patientId: "p1", patientName: "Mario Rossi", medication: "Ramipril 5mg – 1 compressa al giorno", notes: "Terapia cronica ipertensione", status: "pending", createdAt: new Date().toISOString() },
-];
-let invoices: Invoice[] = [
-  { id: "i1", number: "FAT-2026-001", patientId: "p1", patientName: "Mario Rossi", description: "Visita cardiologica + ECG", amount: 170, status: "pending", createdAt: new Date(Date.now() - 86400000 * 3).toISOString() },
+export interface Patient {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  fiscalCode?: string;
+}
+
+const STORAGE_KEY = "aurelia-demo-store-v1";
+
+const DEFAULT_PATIENTS: Patient[] = [
+  { id: "p1", name: "Mario Rossi", email: "mario.rossi@email.it", phone: "333 1234567", fiscalCode: "RSSMRA80A01H501U" },
 ];
 
+function defaultRecipes(): RecipeRequest[] {
+  return [{
+    id: "r1", patientId: "p1", patientName: "Mario Rossi",
+    medication: "Ramipril 5mg – 1 compressa al giorno", notes: "Terapia cronica ipertensione",
+    status: "pending", createdAt: new Date().toISOString(),
+  }];
+}
+
+function defaultInvoices(): Invoice[] {
+  return [{
+    id: "i1", number: "FAT-2026-001", patientId: "p1", patientName: "Mario Rossi",
+    description: "Visita cardiologica + ECG", amount: 170, status: "pending",
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+  }];
+}
+
+interface PersistedState {
+  appointments: Appointment[];
+  recipes: RecipeRequest[];
+  invoices: Invoice[];
+  patients: Patient[];
+}
+
+function loadState(): PersistedState {
+  if (typeof window === "undefined") {
+    return { appointments: [], recipes: defaultRecipes(), invoices: defaultInvoices(), patients: DEFAULT_PATIENTS };
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as PersistedState;
+      return {
+        appointments: parsed.appointments ?? [],
+        recipes: parsed.recipes ?? defaultRecipes(),
+        invoices: parsed.invoices ?? defaultInvoices(),
+        patients: parsed.patients?.length ? parsed.patients : DEFAULT_PATIENTS,
+      };
+    }
+  } catch { /* ignore */ }
+  return { appointments: [], recipes: defaultRecipes(), invoices: defaultInvoices(), patients: DEFAULT_PATIENTS };
+}
+
+let state: PersistedState = loadState();
+
+function save() {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+}
+
+function baseSlotsForDate(date: string): string[] {
+  const d = new Date(date + "T12:00:00");
+  const day = d.getDay();
+  if (day === 0) return [];
+  if (day === 6) return ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30"];
+  return ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00"];
+}
+
+function isPastSlot(date: string, time: string): boolean {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  if (date < today) return true;
+  if (date > today) return false;
+  const [hh, mm] = time.split(":").map(Number);
+  const slot = new Date(now);
+  slot.setHours(hh, mm, 0, 0);
+  return slot.getTime() <= now.getTime() + 15 * 60 * 1000;
+}
+
+export function getAvailableSlots(date: string): string[] {
+  const base = baseSlotsForDate(date);
+  const booked = new Set(
+    state.appointments.filter((a) => a.date === date && a.status !== "cancelled").map((a) => a.time),
+  );
+  return base.filter((t) => !booked.has(t) && !isPastSlot(date, t));
+}
+
+export function patientIdFromEmail(email: string): string {
+  const normalized = email.trim().toLowerCase();
+  const found = state.patients.find((p) => p.email.toLowerCase() === normalized);
+  if (found) return found.id;
+  return `p_${normalized.replace(/[^a-z0-9]/g, "_").slice(0, 24)}`;
+}
+
+export function ensurePatient(input: { name: string; email: string; phone?: string }): Patient {
+  const id = patientIdFromEmail(input.email);
+  const existing = state.patients.find((p) => p.id === id);
+  if (existing) {
+    existing.name = input.name || existing.name;
+    if (input.phone) existing.phone = input.phone;
+    save();
+    return existing;
+  }
+  const p: Patient = { id, name: input.name, email: input.email.trim().toLowerCase(), phone: input.phone };
+  state.patients.push(p);
+  save();
+  return p;
+}
+
 export const store = {
-  getAppointments: () => [...appointments],
+  getAppointments: () => [...state.appointments],
   addAppointment: (a: Omit<Appointment, "id" | "createdAt" | "status">) => {
     const appt: Appointment = { ...a, id: `a${Date.now()}`, status: "confirmed", createdAt: new Date().toISOString() };
-    appointments.push(appt);
+    state.appointments.push(appt);
+    save();
     return appt;
   },
-  getRecipes: (patientId?: string) => patientId ? recipes.filter((r) => r.patientId === patientId) : [...recipes],
+  getRecipes: (patientId?: string) =>
+    patientId ? state.recipes.filter((r) => r.patientId === patientId) : [...state.recipes],
   addRecipe: (r: Omit<RecipeRequest, "id" | "createdAt" | "status" | "code">) => {
     const recipe: RecipeRequest = { ...r, id: `r${Date.now()}`, status: "pending", createdAt: new Date().toISOString() };
-    recipes.push(recipe);
+    state.recipes.push(recipe);
+    save();
     return recipe;
   },
-  updateRecipeStatus: (id: string, status: RecipeRequest["status"]) => {
-    const r = recipes.find((x) => x.id === id);
+  updateRecipeStatus: (
+    id: string,
+    status: RecipeRequest["status"],
+    opts?: { signatureDataUrl?: string; signedBy?: string },
+  ) => {
+    const r = state.recipes.find((x) => x.id === id);
     if (r) {
       r.status = status;
-      if (status === "approved") r.code = `RIC-${Date.now().toString(36).toUpperCase()}`;
+      if (status === "approved") {
+        r.code = `RIC-${Date.now().toString(36).toUpperCase()}`;
+        if (opts?.signatureDataUrl) r.signatureDataUrl = opts.signatureDataUrl;
+        if (opts?.signedBy) r.signedBy = opts.signedBy;
+        r.signedAt = new Date().toISOString();
+      }
+      save();
     }
     return r;
   },
-  getInvoices: (patientId?: string) => patientId ? invoices.filter((i) => i.patientId === patientId) : [...invoices],
+  getInvoices: (patientId?: string) =>
+    patientId ? state.invoices.filter((i) => i.patientId === patientId) : [...state.invoices],
   addInvoice: (inv: Omit<Invoice, "id" | "createdAt" | "status">) => {
     const invoice: Invoice = { ...inv, id: `i${Date.now()}`, status: "pending", createdAt: new Date().toISOString() };
-    invoices.push(invoice);
+    state.invoices.push(invoice);
+    save();
     return invoice;
   },
   payInvoice: (id: string) => {
-    const inv = invoices.find((x) => x.id === id);
+    const inv = state.invoices.find((x) => x.id === id);
     if (inv) {
       inv.status = "paid";
       inv.paidAt = new Date().toISOString();
+      save();
     }
     return inv;
   },
+  getPatients: () => [...state.patients],
   stats: () => ({
-    patients: 1247,
+    patients: Math.max(1247, state.patients.length + 1240),
     years: 12,
     doctors: DOCTORS.length,
-    appointmentsToday: appointments.filter((a) => a.date === new Date().toISOString().slice(0, 10)).length,
-    pendingRecipes: recipes.filter((r) => r.status === "pending").length,
-    revenue: invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.amount, 0),
+    appointmentsToday: state.appointments.filter((a) => a.date === new Date().toISOString().slice(0, 10)).length,
+    pendingRecipes: state.recipes.filter((r) => r.status === "pending").length,
+    revenue: state.invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.amount, 0),
   }),
+  resetDemo: () => {
+    state = { appointments: [], recipes: defaultRecipes(), invoices: defaultInvoices(), patients: [...DEFAULT_PATIENTS] };
+    save();
+  },
 };
 
-export const MOCK_PATIENT = {
-  id: "p1",
-  name: "Mario Rossi",
-  email: "mario.rossi@email.it",
-  phone: "333 1234567",
-  fiscalCode: "RSSMRA80A01H501U",
-};
+export const MOCK_PATIENT = DEFAULT_PATIENTS[0];
