@@ -1,24 +1,37 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
-import { SERVICES, getAvailableSlots, store, type ServiceId, ensurePatient } from "@/lib/store";
+import { useState, useMemo, useEffect } from "react";
+import {
+  SERVICES,
+  getAvailableSlots,
+  store,
+  type ServiceId,
+  ensurePatient,
+} from "@/lib/store";
+import { useApp } from "@/lib/AppContext";
 import { Reveal } from "@/components/Reveal";
 import { toast } from "sonner";
 import { CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addDays, startOfToday, isBefore, isSunday } from "date-fns";
 import { it } from "date-fns/locale";
 
+const VALID_SERVICE_IDS = new Set(SERVICES.map((s) => s.id));
+
 export const Route = createFileRoute("/prenota")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    servizio: (search.servizio as string) || undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const raw = search.servizio as string | undefined;
+    const servizio =
+      raw && VALID_SERVICE_IDS.has(raw as ServiceId) ? (raw as ServiceId) : undefined;
+    return { servizio };
+  },
   component: PrenotaPage,
 });
 
 function PrenotaPage() {
   const { servizio: initialService } = Route.useSearch();
+  const { state: appState } = useApp();
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
-  const [serviceId, setServiceId] = useState<ServiceId | "">((initialService as ServiceId) || "");
+  const [step, setStep] = useState(initialService ? 2 : 1);
+  const [serviceId, setServiceId] = useState<ServiceId | "">(initialService || "");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [name, setName] = useState("");
@@ -26,6 +39,18 @@ function PrenotaPage() {
   const [phone, setPhone] = useState("");
   const [done, setDone] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
+
+  useEffect(() => {
+    if (appState.user?.role === "patient") {
+      setName(appState.user.name);
+      setEmail(appState.user.email);
+    }
+  }, [appState.user]);
+
+  useEffect(() => {
+    if (initialService) setServiceId(initialService);
+  }, [initialService]);
+
   const service = SERVICES.find((s) => s.id === serviceId);
   const slots = useMemo(() => (date ? getAvailableSlots(date) : []), [date, done]);
   const days = useMemo(() => {
@@ -35,13 +60,24 @@ function PrenotaPage() {
       const d = addDays(start, i);
       const iso = format(d, "yyyy-MM-dd");
       const disabled = isBefore(d, today) || isSunday(d);
-      return { date: d, iso, disabled, label: format(d, "EEE d", { locale: it }), isSat: d.getDay() === 6 };
+      return {
+        date: d,
+        iso,
+        disabled,
+        label: format(d, "EEE d", { locale: it }),
+        isSat: d.getDay() === 6,
+      };
     });
   }, [weekOffset]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serviceId || !date || !time || !name || !email) {
+    if (!serviceId || !VALID_SERVICE_IDS.has(serviceId as ServiceId)) {
+      toast.error("Seleziona un servizio valido");
+      setStep(1);
+      return;
+    }
+    if (!date || !time || !name || !email) {
       toast.error("Compila tutti i campi");
       return;
     }
@@ -51,11 +87,12 @@ function PrenotaPage() {
       setTime("");
       return;
     }
-    ensurePatient({ name, email, phone });
+    const patient = ensurePatient({ name, email, phone });
     store.addAppointment({
       serviceId: serviceId as ServiceId,
       date,
       time,
+      patientId: patient.id,
       patientName: name,
       patientEmail: email,
       patientPhone: phone,
@@ -73,8 +110,11 @@ function PrenotaPage() {
           <p className="mt-3 text-muted-foreground">
             {service?.name} · {format(new Date(date), "d MMMM yyyy", { locale: it })} alle {time}
           </p>
-          <button onClick={() => navigate({ to: "/" })} className="mt-8 rounded-2xl bg-primary px-6 py-3 text-sm font-medium text-primary-foreground">
-            Torna alla home
+          <button
+            onClick={() => navigate({ to: "/area-paziente" })}
+            className="mt-8 rounded-2xl bg-primary px-6 py-3 text-sm font-medium text-primary-foreground"
+          >
+            Vai all&apos;area paziente
           </button>
         </div>
       </div>
@@ -86,8 +126,12 @@ function PrenotaPage() {
       <section className="bg-teal-light py-16">
         <div className="mx-auto max-w-[1200px] px-4 sm:px-6">
           <Reveal>
-            <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Prenota una visita</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Lun–Ven 8:30–19:30 · Sabato 9:00–13:00 · Domenica chiuso</p>
+            <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+              Prenota una visita
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Lun–Ven 8:30–19:30 · Sabato 9:00–13:00 · Domenica chiuso
+            </p>
           </Reveal>
         </div>
       </section>
@@ -99,20 +143,34 @@ function PrenotaPage() {
                 <h2 className="font-display text-xl font-semibold">Scegli il servizio</h2>
                 <div className="mt-4 grid gap-3">
                   {SERVICES.map((s) => (
-                    <button key={s.id} type="button" onClick={() => setServiceId(s.id)}
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setServiceId(s.id)}
                       className={`flex items-center justify-between rounded-2xl border px-5 py-4 text-left ${
-                        serviceId === s.id ? "border-primary bg-secondary" : "border-border bg-card"
-                      }`}>
+                        serviceId === s.id
+                          ? "border-primary bg-secondary"
+                          : "border-border bg-card"
+                      }`}
+                    >
                       <div>
                         <p className="font-medium">{s.name}</p>
-                        <p className="text-sm text-muted-foreground">{typeof s.price === "number" ? `€ ${s.price}` : s.price}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {typeof s.price === "number" ? `€ ${s.price}` : s.price}
+                        </p>
                       </div>
                       {serviceId === s.id && <CheckCircle2 className="size-5 text-primary" />}
                     </button>
                   ))}
                 </div>
-                <button type="button" disabled={!serviceId} onClick={() => setStep(2)}
-                  className="mt-6 w-full rounded-2xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-40">Continua</button>
+                <button
+                  type="button"
+                  disabled={!serviceId || !VALID_SERVICE_IDS.has(serviceId as ServiceId)}
+                  onClick={() => setStep(2)}
+                  className="mt-6 w-full rounded-2xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-40"
+                >
+                  Continua
+                </button>
               </Reveal>
             )}
             {step === 2 && (
@@ -120,6 +178,11 @@ function PrenotaPage() {
                 <button type="button" onClick={() => setStep(1)} className="mb-4 flex items-center gap-1 text-sm text-muted-foreground">
                   <ChevronLeft className="size-4" /> Indietro
                 </button>
+                {service && (
+                  <p className="mb-2 text-sm text-muted-foreground">
+                    Servizio: <span className="font-medium text-foreground">{service.name}</span>
+                  </p>
+                )}
                 <h2 className="font-display text-xl font-semibold">Data e orario</h2>
                 <div className="mt-6 flex items-center justify-between">
                   <button type="button" onClick={() => setWeekOffset((w) => Math.max(0, w - 1))} disabled={weekOffset === 0}
