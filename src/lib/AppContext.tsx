@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { MOCK_PATIENT } from "./store";
+import { MOCK_PATIENT, ensurePatient } from "./store";
 
 interface User {
   id: string;
@@ -21,6 +21,7 @@ interface AppContextValue {
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+const USER_KEY = "aurelia-user";
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
@@ -29,33 +30,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem("aurelia-dark");
-    if (saved === "true") {
+    const savedDark = localStorage.getItem("aurelia-dark");
+    if (savedDark === "true") {
       setState((s) => ({ ...s, darkMode: true }));
       document.documentElement.classList.add("dark");
+    }
+    try {
+      const raw = localStorage.getItem(USER_KEY);
+      if (raw) {
+        const user = JSON.parse(raw) as User;
+        setState((s) => ({ ...s, user }));
+      }
+    } catch {
+      /* ignore */
     }
   }, []);
 
   const login = (email: string, asAdmin = false) => {
-    if (asAdmin || email.includes("admin")) {
-      setState((s) => ({
-        ...s,
-        user: { id: "admin", name: "Admin Aurelia", email, role: "admin" },
-      }));
+    let user: User;
+    if (asAdmin || email.toLowerCase().includes("admin")) {
+      user = { id: "admin", name: "Admin Aurelia", email, role: "admin" };
     } else {
-      setState((s) => ({
-        ...s,
-        user: {
-          id: MOCK_PATIENT.id,
-          name: MOCK_PATIENT.name,
-          email: email || MOCK_PATIENT.email,
-          role: "patient",
-        },
-      }));
+      const p = ensurePatient({
+        name: email.toLowerCase().includes("mario")
+          ? MOCK_PATIENT.name
+          : email.split("@")[0] || "Paziente",
+        email: email || MOCK_PATIENT.email,
+      });
+      user = {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        role: "patient",
+      };
     }
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    setState((s) => ({ ...s, user }));
   };
 
-  const logout = () => setState((s) => ({ ...s, user: null }));
+  const logout = () => {
+    localStorage.removeItem(USER_KEY);
+    setState((s) => ({ ...s, user: null }));
+  };
 
   const toggleDark = () => {
     setState((s) => {
