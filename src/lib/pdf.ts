@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import QRCode from "qrcode";
 import type { RecipeRequest, Invoice } from "./store";
 import { CONTACT } from "./store";
 
@@ -23,7 +24,16 @@ function footer(doc: jsPDF) {
   });
 }
 
-export function generateRecipePDF(
+async function qrDataUrl(text: string): Promise<string> {
+  return QRCode.toDataURL(text, {
+    width: 160,
+    margin: 1,
+    errorCorrectionLevel: "M",
+    color: { dark: "#1e293b", light: "#ffffff" },
+  });
+}
+
+export async function generateRecipePDF(
   recipe: RecipeRequest,
   patientName: string,
   fiscalCode?: string,
@@ -32,10 +42,11 @@ export function generateRecipePDF(
   header(doc);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("RICETTA MEDICA", 105, 42, { align: "center" });
+  doc.text("RICETTA MEDICA ELETTRONICA", 105, 42, { align: "center" });
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text(`Codice: ${recipe.code || "—"}`, 14, 55);
+  const nre = recipe.code || "—";
+  doc.text(`NRE: ${nre}`, 14, 55);
   doc.text(
     `Data: ${new Date(recipe.signedAt || recipe.createdAt).toLocaleDateString("it-IT")}`,
     140,
@@ -47,7 +58,7 @@ export function generateRecipePDF(
   doc.text("Paziente", 14, 72);
   doc.setFont("helvetica", "normal");
   doc.text(patientName, 14, 80);
-  if (fiscalCode) doc.text(`CF: ${fiscalCode}`, 14, 87);
+  if (fiscalCode) doc.text(`Codice fiscale: ${fiscalCode}`, 14, 87);
   doc.setFont("helvetica", "bold");
   doc.text("Prescrizione", 14, 102);
   doc.setFont("helvetica", "normal");
@@ -59,11 +70,17 @@ export function generateRecipePDF(
     doc.text(doc.splitTextToSize(recipe.notes, 170), 14, 138);
   }
 
-  doc.setDrawColor(42, 110, 120);
-  doc.rect(150, 155, 40, 40);
+  try {
+    const qr = await qrDataUrl(`https://studioaurelia.it/nre/${encodeURIComponent(nre)}`);
+    doc.addImage(qr, "PNG", 150, 155, 40, 40);
+  } catch {
+    doc.setDrawColor(42, 110, 120);
+    doc.rect(150, 155, 40, 40);
+  }
   doc.setFontSize(8);
-  doc.text("QR", 170, 177, { align: "center" });
-  doc.text(recipe.code || "RIC", 170, 183, { align: "center" });
+  doc.setTextColor(80, 80, 80);
+  doc.text("Scansiona NRE", 170, 200, { align: "center" });
+  doc.setTextColor(40, 40, 40);
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
@@ -97,10 +114,13 @@ export function generateRecipePDF(
   }
 
   footer(doc);
-  doc.save(`ricetta-${recipe.code || recipe.id}.pdf`);
+  doc.save(`ricetta-NRE-${nre}.pdf`);
 }
 
-export function generateInvoicePDF(invoice: Invoice) {
+export async function generateInvoicePDF(
+  invoice: Invoice,
+  fiscalCode?: string,
+) {
   const doc = new jsPDF();
   header(doc);
   doc.setFontSize(14);
@@ -115,24 +135,41 @@ export function generateInvoicePDF(invoice: Invoice) {
     55,
   );
   doc.line(14, 60, 196, 60);
+
   doc.setFont("helvetica", "bold");
   doc.text("Cliente", 14, 72);
   doc.setFont("helvetica", "normal");
   doc.text(invoice.patientName, 14, 80);
+  if (fiscalCode || invoice.fiscalCode) {
+    doc.text(`Codice fiscale: ${fiscalCode || invoice.fiscalCode}`, 14, 87);
+  }
+
   doc.setFont("helvetica", "bold");
-  doc.text("Descrizione", 14, 100);
+  doc.text("Descrizione", 14, 102);
   doc.setFont("helvetica", "normal");
-  doc.text(invoice.description, 14, 108);
-  doc.setFontSize(12);
+  doc.text(invoice.description, 14, 110);
+
+  doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.text(`Importo: € ${invoice.amount.toFixed(2)}`, 14, 130);
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
+  doc.text("Esente IVA (art. 10 DPR 633/72 – prestazioni sanitarie)", 14, 138);
   doc.text(
     `Stato: ${invoice.status === "paid" ? "Pagata" : "Da pagare"}`,
     14,
-    140,
+    148,
   );
+
+  try {
+    const qr = await qrDataUrl(
+      `https://studioaurelia.it/fattura/${encodeURIComponent(invoice.number)}`,
+    );
+    doc.addImage(qr, "PNG", 150, 160, 36, 36);
+  } catch {
+    /* optional */
+  }
+
   footer(doc);
   doc.save(`fattura-${invoice.number}.pdf`);
 }
