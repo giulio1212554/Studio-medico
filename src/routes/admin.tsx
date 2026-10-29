@@ -42,7 +42,6 @@ const FAQ = [
 function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -57,13 +56,11 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
     ctx.lineCap = "round";
     ctx.strokeStyle = "#1e293b";
   }, []);
-
   const pos = (e: React.PointerEvent) => {
     const canvas = canvasRef.current!;
     const r = canvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
-
   const start = (e: React.PointerEvent) => {
     drawing.current = true;
     const ctx = canvasRef.current?.getContext("2d");
@@ -73,7 +70,6 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
     ctx.moveTo(p.x, p.y);
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
-
   const move = (e: React.PointerEvent) => {
     if (!drawing.current) return;
     const ctx = canvasRef.current?.getContext("2d");
@@ -82,13 +78,11 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
   };
-
   const end = () => {
     drawing.current = false;
     const canvas = canvasRef.current;
     if (canvas) onChange(canvas.toDataURL("image/png"));
   };
-
   const clear = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -97,7 +91,6 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     onChange(null);
   };
-
   return (
     <div>
       <canvas ref={canvasRef} className="h-28 w-full touch-none rounded-xl border border-border bg-white"
@@ -118,6 +111,7 @@ function AdminPage() {
   const [invAmount, setInvAmount] = useState("");
   const [invPatientName, setInvPatientName] = useState("");
   const [invPatientEmail, setInvPatientEmail] = useState("");
+  const [invFiscal, setInvFiscal] = useState("");
   const [signingId, setSigningId] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
 
@@ -264,8 +258,8 @@ function AdminPage() {
                     <p className="text-xs font-medium text-muted-foreground">Approvate di recente</p>
                     {recipes.filter((r) => r.status === "approved").slice(-3).map((r) => (
                       <div key={r.id} className="mt-2 flex items-center justify-between text-sm">
-                        <span>{r.patientName} – {r.code}</span>
-                        <button onClick={() => generateRecipePDF(r, r.patientName)} className="text-xs text-primary underline">PDF</button>
+                        <span>{r.patientName} – NRE {r.code}</span>
+                        <button onClick={() => void generateRecipePDF(r, r.patientName)} className="text-xs text-primary underline">PDF</button>
                       </div>
                     ))}
                   </div>
@@ -293,16 +287,19 @@ function AdminPage() {
                     number: `FAT-2026-${String(invoices.length + 1).padStart(3, "0")}`,
                     patientId: patient.id,
                     patientName: patient.name,
+                    fiscalCode: invFiscal.trim().toUpperCase() || undefined,
                     description: invDesc,
                     amount,
                   });
                   toast.success(`Fattura emessa per ${patient.name}`);
-                  setInvDesc(""); setInvAmount(""); setInvPatientName(""); setInvPatientEmail("");
+                  setInvDesc(""); setInvAmount(""); setInvPatientName(""); setInvPatientEmail(""); setInvFiscal("");
                   refresh();
                 }} className="mt-4 space-y-3">
                   <input value={invPatientName} onChange={(e) => setInvPatientName(e.target.value)} placeholder="Nome paziente"
                     className="w-full rounded-2xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
-                  <input value={invPatientEmail} onChange={(e) => setInvPatientEmail(e.target.value)} placeholder="Email paziente (collega all'area paziente)" type="email"
+                  <input value={invPatientEmail} onChange={(e) => setInvPatientEmail(e.target.value)} placeholder="Email paziente" type="email"
+                    className="w-full rounded-2xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                  <input value={invFiscal} onChange={(e) => setInvFiscal(e.target.value)} placeholder="Codice fiscale paziente"
                     className="w-full rounded-2xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
                   {patients.length > 0 && (
                     <p className="text-xs text-muted-foreground">Pazienti noti: {patients.map((p) => p.email).join(", ")}</p>
@@ -331,7 +328,7 @@ function AdminPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span>€ {inv.amount.toFixed(2)}</span>
-                        <button onClick={() => generateInvoicePDF(inv)} className="text-xs text-primary underline">PDF</button>
+                        <button onClick={() => void generateInvoicePDF(inv, inv.fiscalCode)} className="text-xs text-primary underline">PDF</button>
                       </div>
                     </div>
                   ))}
