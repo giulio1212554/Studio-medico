@@ -76,6 +76,7 @@ export interface Appointment {
   serviceId: ServiceId;
   date: string;
   time: string;
+  patientId: string;
   patientName: string;
   patientEmail: string;
   patientPhone: string;
@@ -102,6 +103,7 @@ export interface Invoice {
   number: string;
   patientId: string;
   patientName: string;
+  fiscalCode?: string;
   description: string;
   amount: number;
   status: "pending" | "paid";
@@ -134,6 +136,7 @@ function defaultRecipes(): RecipeRequest[] {
 function defaultInvoices(): Invoice[] {
   return [{
     id: "i1", number: "FAT-2026-001", patientId: "p1", patientName: "Mario Rossi",
+    fiscalCode: "RSSMRA80A01H501U",
     description: "Visita cardiologica + ECG", amount: 170, status: "pending",
     createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
   }];
@@ -222,7 +225,10 @@ export function ensurePatient(input: { name: string; email: string; phone?: stri
 }
 
 export const store = {
-  getAppointments: () => [...state.appointments],
+  getAppointments: (patientId?: string) =>
+    patientId
+      ? state.appointments.filter((a) => a.patientId === patientId)
+      : [...state.appointments],
   addAppointment: (a: Omit<Appointment, "id" | "createdAt" | "status">) => {
     const appt: Appointment = { ...a, id: `a${Date.now()}`, status: "confirmed", createdAt: new Date().toISOString() };
     state.appointments.push(appt);
@@ -246,7 +252,8 @@ export const store = {
     if (r) {
       r.status = status;
       if (status === "approved") {
-        r.code = `RIC-${Date.now().toString(36).toUpperCase()}`;
+        const n = Date.now().toString().slice(-12);
+        r.code = `030A${n}`.slice(0, 15);
         if (opts?.signatureDataUrl) r.signatureDataUrl = opts.signatureDataUrl;
         if (opts?.signedBy) r.signedBy = opts.signedBy;
         r.signedAt = new Date().toISOString();
