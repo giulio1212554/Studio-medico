@@ -385,35 +385,73 @@ function AreaPazientePage() {
           )}
 
           {tab === "documenti" && (
-            <div className="mt-8 space-y-3">
-              <h2 className="font-display text-lg font-semibold">I tuoi documenti PDF</h2>
-              {docs.length === 0 && (
+            <div className="mt-8 space-y-6">
+              <div className="space-y-3">
+                <h2 className="font-display text-lg font-semibold">Cartella medica</h2>
                 <p className="text-sm text-muted-foreground">
-                  Nessun documento ancora. Quando una ricetta è approvata o ricevi una fattura,
-                  appariranno qui.
+                  Documenti caricati dallo studio e PDF generati (ricette, fatture).
                 </p>
-              )}
-              {docs.map((d) => (
-                <Reveal key={d.id}>
-                  <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-soft">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
-                        <FileText className="size-5" strokeWidth={1.5} />
+                {store.getDocuments(pid).length === 0 && docs.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    La cartella è vuota. I file caricati dallo studio e i PDF compariranno qui.
+                  </p>
+                )}
+                {store.getDocuments(pid).map((d) => (
+                  <Reveal key={d.id}>
+                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-soft">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+                          <FileText className="size-5" strokeWidth={1.5} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{d.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            Caricato dallo studio ·{" "}
+                            {new Date(d.uploadedAt).toLocaleDateString("it-IT")}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{d.title}</p>
-                        <p className="truncate text-xs text-muted-foreground">{d.subtitle}</p>
-                      </div>
+                      {d.dataUrl ? (
+                        <a
+                          href={d.dataUrl}
+                          download={d.name}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                        >
+                          <Download className="size-3.5" /> Scarica
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Demo</span>
+                      )}
                     </div>
-                    <button
-                      onClick={d.onDownload}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
-                    >
-                      <Download className="size-3.5" /> Scarica
-                    </button>
-                  </div>
-                </Reveal>
-              ))}
+                  </Reveal>
+                ))}
+              </div>
+              {docs.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground">PDF generati</h3>
+                  {docs.map((d) => (
+                    <Reveal key={d.id}>
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-soft">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+                            <FileText className="size-5" strokeWidth={1.5} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{d.title}</p>
+                            <p className="truncate text-xs text-muted-foreground">{d.subtitle}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={d.onDownload}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                        >
+                          <Download className="size-3.5" /> Scarica
+                        </button>
+                      </div>
+                    </Reveal>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
