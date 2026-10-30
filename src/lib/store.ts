@@ -119,27 +119,74 @@ export interface Patient {
   fiscalCode?: string;
 }
 
-const STORAGE_KEY = "aurelia-demo-store-v1";
+export interface MedicalDocument {
+  id: string;
+  patientId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+  uploadedAt: string;
+  uploadedBy: "admin" | "patient";
+  category?: "referto" | "esame" | "altro";
+}
+
+const STORAGE_KEY = "aurelia-demo-store-v2";
 
 const DEFAULT_PATIENTS: Patient[] = [
-  { id: "p1", name: "Mario Rossi", email: "mario.rossi@email.it", phone: "333 1234567", fiscalCode: "RSSMRA80A01H501U" },
+  {
+    id: "p1",
+    name: "Mario Rossi",
+    email: "mario.rossi@email.it",
+    phone: "333 1234567",
+    fiscalCode: "RSSMRA80A01H501U",
+  },
 ];
 
 function defaultRecipes(): RecipeRequest[] {
-  return [{
-    id: "r1", patientId: "p1", patientName: "Mario Rossi",
-    medication: "Ramipril 5mg – 1 compressa al giorno", notes: "Terapia cronica ipertensione",
-    status: "pending", createdAt: new Date().toISOString(),
-  }];
+  return [
+    {
+      id: "r1",
+      patientId: "p1",
+      patientName: "Mario Rossi",
+      medication: "Ramipril 5mg – 1 compressa al giorno",
+      notes: "Terapia cronica ipertensione",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    },
+  ];
 }
 
 function defaultInvoices(): Invoice[] {
-  return [{
-    id: "i1", number: "FAT-2026-001", patientId: "p1", patientName: "Mario Rossi",
-    fiscalCode: "RSSMRA80A01H501U",
-    description: "Visita cardiologica + ECG", amount: 170, status: "pending",
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-  }];
+  return [
+    {
+      id: "i1",
+      number: "FAT-2026-001",
+      patientId: "p1",
+      patientName: "Mario Rossi",
+      fiscalCode: "RSSMRA80A01H501U",
+      description: "Visita cardiologica + ECG",
+      amount: 170,
+      status: "pending",
+      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    },
+  ];
+}
+
+function defaultDocuments(): MedicalDocument[] {
+  return [
+    {
+      id: "d1",
+      patientId: "p1",
+      name: "ECG_2026-10.pdf",
+      mimeType: "application/pdf",
+      size: 12000,
+      dataUrl: "",
+      uploadedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+      uploadedBy: "admin",
+      category: "esame",
+    },
+  ];
 }
 
 interface PersistedState {
@@ -147,11 +194,18 @@ interface PersistedState {
   recipes: RecipeRequest[];
   invoices: Invoice[];
   patients: Patient[];
+  documents: MedicalDocument[];
 }
 
 function loadState(): PersistedState {
   if (typeof window === "undefined") {
-    return { appointments: [], recipes: defaultRecipes(), invoices: defaultInvoices(), patients: DEFAULT_PATIENTS };
+    return {
+      appointments: [],
+      recipes: defaultRecipes(),
+      invoices: defaultInvoices(),
+      patients: DEFAULT_PATIENTS,
+      documents: defaultDocuments(),
+    };
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -162,25 +216,43 @@ function loadState(): PersistedState {
         recipes: parsed.recipes ?? defaultRecipes(),
         invoices: parsed.invoices ?? defaultInvoices(),
         patients: parsed.patients?.length ? parsed.patients : DEFAULT_PATIENTS,
+        documents: parsed.documents ?? defaultDocuments(),
       };
     }
-  } catch { /* ignore */ }
-  return { appointments: [], recipes: defaultRecipes(), invoices: defaultInvoices(), patients: DEFAULT_PATIENTS };
+  } catch {
+    /* ignore */
+  }
+  return {
+    appointments: [],
+    recipes: defaultRecipes(),
+    invoices: defaultInvoices(),
+    patients: DEFAULT_PATIENTS,
+    documents: defaultDocuments(),
+  };
 }
 
 let state: PersistedState = loadState();
 
 function save() {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* quota */
+  }
 }
 
 function baseSlotsForDate(date: string): string[] {
   const d = new Date(date + "T12:00:00");
   const day = d.getDay();
   if (day === 0) return [];
-  if (day === 6) return ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30"];
-  return ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00"];
+  if (day === 6) {
+    return ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30"];
+  }
+  return [
+    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+    "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00",
+  ];
 }
 
 function isPastSlot(date: string, time: string): boolean {
@@ -197,7 +269,9 @@ function isPastSlot(date: string, time: string): boolean {
 export function getAvailableSlots(date: string): string[] {
   const base = baseSlotsForDate(date);
   const booked = new Set(
-    state.appointments.filter((a) => a.date === date && a.status !== "cancelled").map((a) => a.time),
+    state.appointments
+      .filter((a) => a.date === date && a.status !== "cancelled")
+      .map((a) => a.time),
   );
   return base.filter((t) => !booked.has(t) && !isPastSlot(date, t));
 }
@@ -209,17 +283,40 @@ export function patientIdFromEmail(email: string): string {
   return `p_${normalized.replace(/[^a-z0-9]/g, "_").slice(0, 24)}`;
 }
 
-export function ensurePatient(input: { name: string; email: string; phone?: string }): Patient {
+export function ensurePatient(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  fiscalCode?: string;
+}): Patient {
   const id = patientIdFromEmail(input.email);
   const existing = state.patients.find((p) => p.id === id);
   if (existing) {
     existing.name = input.name || existing.name;
     if (input.phone) existing.phone = input.phone;
+    if (input.fiscalCode) existing.fiscalCode = input.fiscalCode;
     save();
     return existing;
   }
-  const p: Patient = { id, name: input.name, email: input.email.trim().toLowerCase(), phone: input.phone };
+  const p: Patient = {
+    id,
+    name: input.name,
+    email: input.email.trim().toLowerCase(),
+    phone: input.phone,
+    fiscalCode: input.fiscalCode,
+  };
   state.patients.push(p);
+  save();
+  return p;
+}
+
+export function updatePatient(
+  id: string,
+  patch: Partial<Pick<Patient, "name" | "phone" | "fiscalCode">>,
+) {
+  const p = state.patients.find((x) => x.id === id);
+  if (!p) return null;
+  Object.assign(p, patch);
   save();
   return p;
 }
@@ -230,7 +327,12 @@ export const store = {
       ? state.appointments.filter((a) => a.patientId === patientId)
       : [...state.appointments],
   addAppointment: (a: Omit<Appointment, "id" | "createdAt" | "status">) => {
-    const appt: Appointment = { ...a, id: `a${Date.now()}`, status: "confirmed", createdAt: new Date().toISOString() };
+    const appt: Appointment = {
+      ...a,
+      id: `a${Date.now()}`,
+      status: "confirmed",
+      createdAt: new Date().toISOString(),
+    };
     state.appointments.push(appt);
     save();
     return appt;
@@ -238,7 +340,12 @@ export const store = {
   getRecipes: (patientId?: string) =>
     patientId ? state.recipes.filter((r) => r.patientId === patientId) : [...state.recipes],
   addRecipe: (r: Omit<RecipeRequest, "id" | "createdAt" | "status" | "code">) => {
-    const recipe: RecipeRequest = { ...r, id: `r${Date.now()}`, status: "pending", createdAt: new Date().toISOString() };
+    const recipe: RecipeRequest = {
+      ...r,
+      id: `r${Date.now()}`,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
     state.recipes.push(recipe);
     save();
     return recipe;
@@ -265,7 +372,12 @@ export const store = {
   getInvoices: (patientId?: string) =>
     patientId ? state.invoices.filter((i) => i.patientId === patientId) : [...state.invoices],
   addInvoice: (inv: Omit<Invoice, "id" | "createdAt" | "status">) => {
-    const invoice: Invoice = { ...inv, id: `i${Date.now()}`, status: "pending", createdAt: new Date().toISOString() };
+    const invoice: Invoice = {
+      ...inv,
+      id: `i${Date.now()}`,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
     state.invoices.push(invoice);
     save();
     return invoice;
@@ -280,16 +392,63 @@ export const store = {
     return inv;
   },
   getPatients: () => [...state.patients],
+  getPatient: (id: string) => state.patients.find((p) => p.id === id) ?? null,
+  getDocuments: (patientId?: string) =>
+    patientId
+      ? state.documents.filter((d) => d.patientId === patientId)
+      : [...state.documents],
+  addDocument: (doc: Omit<MedicalDocument, "id" | "uploadedAt">) => {
+    const existing = state.documents.filter((d) => d.patientId === doc.patientId);
+    if (existing.length >= 8) {
+      throw new Error("Max 8 documenti per cartella in demo");
+    }
+    if (doc.dataUrl && doc.dataUrl.length > 900_000) {
+      throw new Error("File troppo grande per la demo (max ~600 KB)");
+    }
+    const d: MedicalDocument = {
+      ...doc,
+      id: `d${Date.now()}`,
+      uploadedAt: new Date().toISOString(),
+    };
+    state.documents.push(d);
+    save();
+    return d;
+  },
+  removeDocument: (id: string) => {
+    state.documents = state.documents.filter((d) => d.id !== id);
+    save();
+  },
+  getFolder: (patientId: string) => {
+    const patient = state.patients.find((p) => p.id === patientId);
+    if (!patient) return null;
+    return {
+      patient,
+      documents: state.documents.filter((d) => d.patientId === patientId),
+      recipes: state.recipes.filter((r) => r.patientId === patientId),
+      invoices: state.invoices.filter((i) => i.patientId === patientId),
+      appointments: state.appointments.filter((a) => a.patientId === patientId),
+    };
+  },
   stats: () => ({
-    patients: Math.max(1247, state.patients.length + 1240),
+    patients: state.patients.length,
     years: 12,
     doctors: DOCTORS.length,
-    appointmentsToday: state.appointments.filter((a) => a.date === new Date().toISOString().slice(0, 10)).length,
+    appointmentsToday: state.appointments.filter(
+      (a) => a.date === new Date().toISOString().slice(0, 10),
+    ).length,
     pendingRecipes: state.recipes.filter((r) => r.status === "pending").length,
-    revenue: state.invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.amount, 0),
+    revenue: state.invoices
+      .filter((i) => i.status === "paid")
+      .reduce((s, i) => s + i.amount, 0),
   }),
   resetDemo: () => {
-    state = { appointments: [], recipes: defaultRecipes(), invoices: defaultInvoices(), patients: [...DEFAULT_PATIENTS] };
+    state = {
+      appointments: [],
+      recipes: defaultRecipes(),
+      invoices: defaultInvoices(),
+      patients: [...DEFAULT_PATIENTS],
+      documents: defaultDocuments(),
+    };
     save();
   },
 };
