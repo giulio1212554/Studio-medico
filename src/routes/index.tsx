@@ -1,20 +1,36 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarCheck, Mail, FileDown, Stethoscope, ArrowRight, Star } from "lucide-react";
+import { useEffect, useState } from "react";
 import { SERVICES, REVIEWS, store } from "@/lib/store";
 import { Reveal, Stagger, StaggerItem } from "@/components/Reveal";
+import { getBrand } from "@/lib/brand";
 
 export const Route = createFileRoute("/")({ component: HomePage });
 
 function HomePage() {
   const stats = store.stats();
+  const [brand, setBrand] = useState(getBrand);
+  useEffect(() => {
+    setBrand(getBrand());
+    if (typeof document !== "undefined") {
+      document.title = `${brand.studioName} – La cura, senza attese`;
+    }
+  }, []);
+
+  const b = brand;
+
   return (
     <>
       <section className="relative min-h-[90vh] overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url(https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=1920&q=80)" }} />
         <div className="absolute inset-0 bg-gradient-to-br from-primary/70 via-primary/50 to-primary/80" />
         <div className="relative mx-auto flex min-h-[90vh] max-w-[1200px] flex-col justify-center px-4 pb-24 pt-28 sm:px-6">
+          <p className="mb-3 text-sm font-medium uppercase tracking-wider text-white/80">{b.studioName}{b.city ? ` · ${b.city}` : ""}</p>
           <h1 className="max-w-3xl font-display text-4xl font-semibold leading-[1.1] tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">La cura, senza attese.</h1>
-          <p className="mt-6 max-w-xl text-lg text-white/90 sm:text-xl">Prenota online, ricevi conferma immediata e scarica ricette e fatture dalla tua area paziente.</p>
+          <p className="mt-6 max-w-xl text-lg text-white/90 sm:text-xl">
+            Prenota online presso {b.studioName}, ricevi conferma immediata e scarica ricette e fatture dalla tua area paziente.
+            {b.doctor ? ` Seguito da ${b.doctor}.` : ""}
+          </p>
           <div className="mt-10 flex flex-wrap gap-4">
             <Link to="/prenota" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-semibold text-primary shadow-float">Prenota una visita <ArrowRight className="size-4" /></Link>
             <Link to="/area-paziente" className="inline-flex items-center gap-2 rounded-2xl border-2 border-white/80 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur-sm">Richiedi una ricetta</Link>
@@ -119,7 +135,7 @@ function HomePage() {
         <div className="mx-auto max-w-[1200px] px-4 sm:px-6">
           <Reveal>
             <div className="rounded-3xl bg-primary px-8 py-16 text-center text-primary-foreground sm:px-16">
-              <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Pronto a prenotare?</h2>
+              <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">Pronto a prenotare presso {b.shortName}?</h2>
               <p className="mx-auto mt-4 max-w-md text-primary-foreground/85">Nessuna chiamata, nessuna attesa. Scegli il servizio e l&apos;orario che preferisci.</p>
               <Link to="/prenota" className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-white px-7 py-3.5 text-sm font-semibold text-primary shadow-float">Prenota ora <ArrowRight className="size-4" /></Link>
             </div>
