@@ -3,6 +3,7 @@ import { Menu, X, Moon, Sun, User } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useApp } from "@/lib/AppContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { getBrand } from "@/lib/brand";
 
 const links = [
   { to: "/", label: "Home" },
@@ -15,8 +16,10 @@ export function Nav() {
   const { state, toggleDark, logout } = useApp();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [brand, setBrand] = useState(getBrand);
 
   useEffect(() => {
+    setBrand(getBrand());
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -32,7 +35,7 @@ export function Nav() {
     >
       <div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between gap-4 px-4 sm:px-6">
         <Link to="/" className="select-none font-display text-xl font-semibold tracking-tight text-primary">
-          Studio <span className="text-foreground">Aurelia</span>
+          Studio <span className="text-foreground">{brand.shortName}</span>
         </Link>
 
         <nav className="hidden items-center gap-8 text-sm font-medium md:flex">

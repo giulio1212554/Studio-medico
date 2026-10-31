@@ -1,25 +1,27 @@
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
 import type { RecipeRequest, Invoice } from "./store";
-import { CONTACT } from "./store";
+import { getBrand } from "./brand";
 
 function header(doc: jsPDF) {
+  const brand = getBrand();
   doc.setFillColor(42, 110, 120);
   doc.rect(0, 0, 210, 28, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
-  doc.text("Studio Medico Aurelia", 14, 14);
+  doc.text(brand.studioName, 14, 14);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`${CONTACT.address}  ·  Tel. ${CONTACT.phone}`, 14, 22);
+  doc.text(`${brand.address}  ·  Tel. ${brand.phone}`, 14, 22);
   doc.setTextColor(40, 40, 40);
 }
 
 function footer(doc: jsPDF) {
+  const brand = getBrand();
   doc.setFontSize(8);
   doc.setTextColor(120, 120, 120);
-  doc.text("Documento generato da Tecoloii – Studio Medico Aurelia", 105, 287, {
+  doc.text(`Documento demo – ${brand.studioName}`, 105, 287, {
     align: "center",
   });
 }
@@ -71,7 +73,7 @@ export async function generateRecipePDF(
   }
 
   try {
-    const qr = await qrDataUrl(`https://studioaurelia.it/nre/${encodeURIComponent(nre)}`);
+    const qr = await qrDataUrl(`nre:${encodeURIComponent(nre)}`);
     doc.addImage(qr, "PNG", 150, 155, 40, 40);
   } catch {
     doc.setDrawColor(42, 110, 120);
@@ -162,9 +164,7 @@ export async function generateInvoicePDF(
   );
 
   try {
-    const qr = await qrDataUrl(
-      `https://studioaurelia.it/fattura/${encodeURIComponent(invoice.number)}`,
-    );
+    const qr = await qrDataUrl(`fattura:${encodeURIComponent(invoice.number)}`);
     doc.addImage(qr, "PNG", 150, 160, 36, 36);
   } catch {
     /* optional */

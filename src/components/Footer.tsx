@@ -1,16 +1,23 @@
 import { Link } from "@tanstack/react-router";
 import { MapPin, Phone, Mail } from "lucide-react";
-import { CONTACT } from "@/lib/store";
+import { useEffect, useState } from "react";
+import { getBrand } from "@/lib/brand";
 
 export function Footer() {
+  const [brand, setBrand] = useState(getBrand);
+  useEffect(() => {
+    setBrand(getBrand());
+  }, []);
+
   return (
     <footer className="bg-primary text-primary-foreground">
       <div className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6">
         <div className="grid gap-10 md:grid-cols-3">
           <div>
-            <h3 className="font-display text-2xl font-semibold">Studio Aurelia</h3>
+            <h3 className="font-display text-2xl font-semibold">{brand.studioName}</h3>
             <p className="mt-3 max-w-xs text-sm text-primary-foreground/80">
               La cura, senza attese. Medicina di qualità in un ambiente calmo e luminoso.
+              {brand.doctor ? ` · ${brand.doctor}` : ""}
             </p>
           </div>
           <div>
@@ -32,22 +39,22 @@ export function Footer() {
             <ul className="mt-4 space-y-3 text-sm">
               <li className="flex items-start gap-2">
                 <MapPin className="mt-0.5 size-4 shrink-0 opacity-70" />
-                {CONTACT.address}
+                {brand.address}
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="size-4 shrink-0 opacity-70" />
-                <a href={`tel:${CONTACT.phone.replace(/\s/g, "")}`} className="hover:underline">{CONTACT.phone}</a>
+                <a href={`tel:${brand.phone.replace(/\s/g, "")}`} className="hover:underline">{brand.phone}</a>
               </li>
               <li className="flex items-center gap-2">
                 <Mail className="size-4 shrink-0 opacity-70" />
-                <a href={`mailto:${CONTACT.email}`} className="hover:underline">{CONTACT.email}</a>
+                <a href={`mailto:${brand.email}`} className="hover:underline">{brand.email}</a>
               </li>
             </ul>
           </div>
         </div>
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-primary-foreground/20 pt-8 text-xs text-primary-foreground/60 sm:flex-row">
-          <p>© {new Date().getFullYear()} Studio Medico Aurelia. Tutti i diritti riservati.</p>
-          <p className="text-[11px]">Realizzato da Tecoloii</p>
+          <p>© {new Date().getFullYear()} {brand.studioName}. Tutti i diritti riservati.</p>
+          <p className="text-[11px]">Demo personalizzabile · Ischia Digital</p>
         </div>
       </div>
     </footer>
